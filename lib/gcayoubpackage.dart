@@ -4,14 +4,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-
-enum Returned { evfine, error }
+import 'package:gcayoubpackage/changepage.dart';
+import 'package:gcayoubpackage/setpreference.dart';
 
 class Authentification {
   FirebaseAuth _auth = FirebaseAuth.instance;
   String verificationId;
   TextEditingController _codecontroler = TextEditingController();
-  Future<Returned> number(BuildContext context, List<String> values) async {
+  number(BuildContext context, String values, homepage) async {
     final PhoneCodeAutoRetrievalTimeout _codeAutoRetrievalTimeout =
         (String verificationId) {
       //this.verificationId = verificationId;
@@ -19,10 +19,10 @@ class Authentification {
 
     final PhoneVerificationCompleted _verificationCompleted =
         (AuthCredential credential) async {
-      AuthResult result = await _auth.signInWithCredential(credential);
+      var result = await _auth.signInWithCredential(credential);
 
       if (result.user != null) {
-        return Returned.evfine;
+        changeremplacepage(context, homepage);
       }
     };
 
@@ -47,22 +47,23 @@ class Authentification {
               ),
             ),
             actions: <Widget>[
-              FlatButton(
-                color: Colors.blue,
+              ElevatedButton(
                 onPressed: () async {
                   final code = _codecontroler.text.trim();
                   try {
-                    AuthCredential credential = PhoneAuthProvider.getCredential(
+                    AuthCredential credential = PhoneAuthProvider.credential(
                         verificationId: verificationId, smsCode: code);
-                    AuthResult authResult =
+                    var authResult =
                         await _auth.signInWithCredential(credential);
                     if (authResult.user != null) {
-                      return Returned.evfine;
+                      await setpref(true).then((value) => value
+                          ? changeremplacepage(context, homepage)
+                          : poprefresh(context));
                     } else {
-                      return Returned.error;
+                      poprefresh(context);
                     }
                   } catch (e) {
-                    return Returned.error;
+                    poprefresh(context);
                   }
                 },
                 child: Row(
@@ -81,27 +82,15 @@ class Authentification {
       );
     };
 
-    final PhoneVerificationFailed _verificationFailed =
-        (AuthException authException) {
-      return Returned.error;
-    };
+    final PhoneVerificationFailed _verificationFailed = (var authException) {};
 
-    try {
-      await _auth
-          .verifyPhoneNumber(
-        phoneNumber: values[0].trim(),
-        codeAutoRetrievalTimeout: _codeAutoRetrievalTimeout,
-        codeSent: codeSent,
-        timeout: const Duration(seconds: 20),
-        verificationCompleted: _verificationCompleted,
-        verificationFailed: _verificationFailed,
-      )
-          .whenComplete(() {
-        return Returned.evfine;
-      });
-    } catch (e) {
-      return Returned.error;
-    }
-    return Returned.evfine;
+    await _auth.verifyPhoneNumber(
+      phoneNumber: values.trim(),
+      codeAutoRetrievalTimeout: _codeAutoRetrievalTimeout,
+      codeSent: codeSent,
+      timeout: const Duration(seconds: 20),
+      verificationCompleted: _verificationCompleted,
+      verificationFailed: _verificationFailed,
+    );
   }
 }

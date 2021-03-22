@@ -1,10 +1,9 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-//import 'package:geocoding/geocoding.dart';
+import 'package:geocoder/geocoder.dart';
+import 'package:geocoder/services/base.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class Googlemaps extends StatefulWidget {
   Googlemaps({Key key}) : super(key: key);
@@ -13,43 +12,29 @@ class Googlemaps extends StatefulWidget {
   _GooglemapsState createState() => _GooglemapsState();
 }
 
+Position position;
+List<Address> adress;
+
 class _GooglemapsState extends State<Googlemaps> {
-  GoogleMapController _controller;
-  Position position;
+  Completer<GoogleMapController> _controller = Completer();
+  Geocoding geocoding = Geocoder.local;
+
   var placeMark;
   Widget _child;
 
   @override
   void initState() {
+    _getCurrentLocation();
     getLocation();
     super.initState();
   }
 
   Future<void> getLocation() async {
-    PermissionStatus permission = await PermissionHandler()
-        .checkPermissionStatus(PermissionGroup.location);
+    bool serviceEnabled;
 
-    if (permission == PermissionStatus.denied) {
-      await PermissionHandler()
-          .requestPermissions([PermissionGroup.locationAlways]);
-    }
-
-    var geolocator = Geolocator();
-
-    GeolocationStatus geolocationStatus =
-        await geolocator.checkGeolocationPermissionStatus();
-
-    switch (geolocationStatus) {
-      case GeolocationStatus.denied:
-        break;
-      case GeolocationStatus.disabled:
-        break;
-      case GeolocationStatus.restricted:
-        break;
-      case GeolocationStatus.unknown:
-        break;
-      case GeolocationStatus.granted:
-        _getCurrentLocation();
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error('Location services are disabled.');
     }
   }
 
@@ -63,46 +48,54 @@ class _GooglemapsState extends State<Googlemaps> {
     ].toSet();
   }
 
-  // ignore: unused_element
-  void _getCurrentLocation() async {
-    final Geolocator _geolocator = Geolocator();
-    Position res = await _geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best);
-    try {
-      Position res = await Geolocator().getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
-      );
-
-      setState(() {
-        position = res;
-        _child = _mapWidget();
-      });
-      List newPlace = await _geolocator.placemarkFromCoordinates(
-          res.latitude, res.longitude);
-
-      // List<Placemark> newPlace =await _geolocator.placemarkFromCoordinates(res.latitude, res.longitude);
-      placeMark = newPlace[0];
-    } catch (e) {}
+  Widget _mapWidget() {
+    return Stack(
+      children: [
+        GoogleMap(
+          mapType: MapType.normal,
+          markers: createMarker(position.latitude, position.longitude),
+          initialCameraPosition: CameraPosition(
+            target: LatLng(position.latitude, position.longitude),
+            zoom: 12.0,
+          ),
+          onMapCreated: (GoogleMapController controller) {
+            _controller.complete(controller);
+          },
+        ),
+        ElevatedButton.icon(
+          onPressed: () {
+            _getCurrentLocation();
+          },
+          icon: Icon(Icons.replay_circle_filled),
+          label: Container(
+            height: 0,
+            width: 0,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(5)),
+          ),
+          style: ButtonStyle(
+              backgroundColor: MaterialStateProperty.all<Color>(
+                  Colors.black.withOpacity(0.0))),
+        ),
+      ],
+    );
   }
 
-  Widget _mapWidget() {
-    return GoogleMap(
-      mapType: MapType.normal,
-      markers: createMarker(position.latitude, position.longitude),
-      initialCameraPosition: CameraPosition(
-        target: LatLng(position.latitude, position.longitude),
-        zoom: 12.0,
-      ),
-      onMapCreated: (GoogleMapController controller) {
-        _controller = controller;
-      },
-    );
+  // ignore: unused_element
+  void _getCurrentLocation() async {
+    Position res = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best);
+    setState(() {
+      position = res;
+      _child = _mapWidget();
+    });
+    adress = await geocoding.findAddressesFromCoordinates(
+        new Coordinates(position.latitude, position.longitude));
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      child: _mapWidget(),
+      child: _child,
     );
   }
 }
